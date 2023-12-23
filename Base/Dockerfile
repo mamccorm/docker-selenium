@@ -1,8 +1,8 @@
-FROM ubuntu:jammy-20231128
+FROM cgr.dev/chainguard/wolfi-base
 LABEL authors="Selenium <selenium-developers@googlegroups.com>"
 
 # Arguments to define the version of dependencies to download
-ARG VERSION
+ARG VERSION=4.16.0
 ARG RELEASE=selenium-${VERSION}
 # Default value should be aligned with upstream Selenium (https://github.com/SeleniumHQ/selenium/blob/trunk/java/maven_deps.bzl)
 ARG OPENTELEMETRY_VERSION=1.28.0
@@ -16,48 +16,40 @@ ARG UID=1200
 ARG GID=1201
 
 USER root
-#================================================
-# Customize sources for apt-get
-#================================================
-RUN  echo "deb http://archive.ubuntu.com/ubuntu jammy main universe\n" > /etc/apt/sources.list \
-  && echo "deb http://archive.ubuntu.com/ubuntu jammy-updates main universe\n" >> /etc/apt/sources.list \
-  && echo "deb http://security.ubuntu.com/ubuntu jammy-security main universe\n" >> /etc/apt/sources.list
-
-# No interactive frontend during docker build
-ENV DEBIAN_FRONTEND=noninteractive \
-    DEBCONF_NONINTERACTIVE_SEEN=true
 
 #========================
 # Miscellaneous packages
 # Includes minimal runtime used for executing non GUI Java programs
 #========================
-RUN apt-get -qqy update \
-  && apt-get upgrade -yq \
-  && apt-get -qqy --no-install-recommends install \
+RUN apk update && apk add \
     acl \
+    bash \
     bzip2 \
     ca-certificates \
-    openjdk-11-jre-headless \
+    openjdk-11-jre \
+    openjdk-11-default-jvm \
     tzdata \
-    sudo \
+    sudo-rs \
     unzip \
     wget \
     jq \
     curl \
     supervisor \
-    gnupg2 \
-    libnss3-tools \
-  && rm -rf /var/lib/apt/lists/* /var/cache/apt/* \
-  && sed -i 's/securerandom\.source=file:\/dev\/random/securerandom\.source=file:\/dev\/urandom/' ./usr/lib/jvm/java-11-openjdk-amd64/conf/security/java.security
+    gnupg \
+    libnss-tools \
+    yq
+
+RUN sed -i 's/securerandom\.source=file:\/dev\/random/securerandom\.source=file:\/dev\/urandom/' ./usr/lib/jvm/java-*-openjdk/conf/security/java.security
 
 #===================
 # Timezone settings
 # Possible alternative: https://github.com/docker/docker/issues/3359#issuecomment-32150214
 #===================
-ENV TZ "UTC"
-RUN ln -fs /usr/share/zoneinfo/${TZ} /etc/localtime && \
-    dpkg-reconfigure -f noninteractive tzdata && \
-    cat /etc/timezone
+ENV TZ=UTC
+RUN apk add --no-cache tzdata \
+    && cp /usr/share/zoneinfo/${TZ} /etc/localtime \
+    && echo "${TZ}" >  /etc/timezone \
+    && apk del tzdata
 
 #======================================
 # Configure environement
@@ -71,16 +63,13 @@ ENV SEL_DOWNLOAD_DIR=${HOME}/Downloads
 #========================================
 # Add normal user and group with passwordless sudo
 #========================================
-RUN groupadd ${SEL_GROUP} \
-         --gid ${SEL_GID} \
-  && useradd ${SEL_USER} \
-         --create-home \
-         --gid ${SEL_GID} \
-         --shell /bin/bash \
-         --uid ${SEL_UID} \
-  && usermod -a -G sudo ${SEL_USER} \
-  && echo 'ALL ALL = (ALL) NOPASSWD: ALL' >> /etc/sudoers \
-  && echo "${SEL_USER}:${SEL_PASSWD}" | chpasswd
+RUN mkdir -p /etc/sudoers.d \
+  && addgroup -g ${SEL_GID} ${SEL_GROUP} \
+  && adduser -D -u ${SEL_UID} -G ${SEL_GROUP} -s /bin/sh -h /home/${SEL_USER} ${SEL_USER} \
+  && echo "${SEL_USER}:${SEL_PASSWD}" | chpasswd \
+  && echo "${SEL_USER} ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/${SEL_USER} \
+  && chmod 0440 /etc/sudoers.d/${SEL_USER}
+
 
 #======================================
 # Add Grid check script

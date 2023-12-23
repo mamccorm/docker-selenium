@@ -1,8 +1,8 @@
-ARG NAMESPACE
-ARG VERSION
-ARG AUTHORS
-FROM ${NAMESPACE}/base:${VERSION}
-LABEL authors=${AUTHORS}
+#
+# TODO: Still WIP.
+#
+
+FROM local-wolfi-selenium-base:latest
 
 ARG NOVNC_VERSION="1.4.0"
 ARG WEBSOCKIFY_VERSION="0.11.0"
@@ -12,11 +12,16 @@ USER root
 #==============
 # Xvfb
 #==============
-RUN apt-get update -qqy \
-  && apt-get -qqy --no-install-recommends install \
-    xvfb \
-    pulseaudio \
-  && rm -rf /var/lib/apt/lists/* /var/cache/apt/*
+#
+# TOOD: WE DO NOT HAVE THESE IN WOLFI TODAY. PACKAGES WOULD NEED TO BE
+# CREATED.
+#
+RUN apk add \
+  && fluxbox
+  && pulseaudio \
+  && tzdata \
+  && x11vnc \
+  && xvfb
 
 #==============================
 # Locale and encoding settings
@@ -28,33 +33,10 @@ ENV LANGUAGE ${LANG_WHICH}_${LANG_WHERE}.${ENCODING}
 ENV LANG ${LANGUAGE}
 # Layer size: small: ~9 MB
 # Layer size: small: ~9 MB MB (with --no-install-recommends)
-RUN apt-get -qqy update \
-  && apt-get -qqy --no-install-recommends install \
-    language-pack-en \
-    tzdata \
-    locales \
-  && locale-gen ${LANGUAGE} \
-  && dpkg-reconfigure --frontend noninteractive locales \
-  && apt-get -qyy autoremove \
-  && rm -rf /var/lib/apt/lists/* \
-  && apt-get -qyy clean
-
-#=====
-# VNC
-#=====
-RUN apt-get update -qqy \
-  && apt-get -qqy --no-install-recommends install \
-  x11vnc \
-  && rm -rf /var/lib/apt/lists/* /var/cache/apt/*
-
-#=========
-# fluxbox
-# A fast, lightweight and responsive window manager
-#=========
-RUN apt-get update -qqy \
-  && apt-get -qqy --no-install-recommends install \
-    fluxbox \
-  && rm -rf /var/lib/apt/lists/* /var/cache/apt/*
+RUN cp /usr/share/zoneinfo/UTC /etc/localtime \
+    && echo "UTC" >  /etc/timezone \
+    && apk del tzdata \
+    && rm -rf /var/cache/apk/*
 
 #================
 # Font libraries
